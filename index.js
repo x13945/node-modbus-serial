@@ -282,6 +282,11 @@ function _cancelTimeout(timeoutHandle) {
     clearTimeout(timeoutHandle);
 }
 
+var cacheBuffer = Buffer.alloc(0);
+var CACHE_TIMEOUT = 20;
+var cacheTimer = null;
+var messageBegin = true;
+
 /**
  * Handle incoming data from the Modbus port.
  *
@@ -289,8 +294,24 @@ function _cancelTimeout(timeoutHandle) {
  * @private
  */
 function _onReceive(data) {
-    var modbus = this;
-    var error;
+  var dataToR = data.toString('hex');
+  console.log('received data: ', dataToR);
+  var _this = this;
+  if (messageBegin) {
+    cacheBuffer = Buffer.concat([cacheBuffer, data]);
+    cacheTimer && clearTimeout(cacheTimer);
+    cacheTimer = setTimeout(() => {
+      cacheTimer = null;
+      messageBegin = false;
+      _this._onReceive(cacheBuffer);
+      cacheBuffer = Buffer.alloc(0);
+      messageBegin = true;
+    }, CACHE_TIMEOUT);
+    return;
+  }
+
+  var modbus = this;
+  var error;
 
     // set locale helpers variables
     var transaction = modbus._transactions[modbus._port._transactionIdRead];
@@ -339,24 +360,24 @@ function _onReceive(data) {
     /* check incoming data
      */
 
-    /* check minimal length
-     */
-    if (!transaction.lengthUnknown && data.length < 5) {
-        error = "Data length error, expected " +
-            transaction.nextLength + " got " + data.length;
-        next(new Error(error));
-        return;
-    }
+  /* check minimal length
+   */
+  // if (!transaction.lengthUnknown && data.length < 5) {
+  //   error = 'Data length error, expected ' +
+  //     transaction.nextLength + ' got ' + data.length;
+  //   next(new Error(error));
+  //   return;
+  // }
 
-    /* check message CRC
-     * if CRC is bad raise an error
-     */
-    var crcIn = data.readUInt16LE(data.length - 2);
-    if (crcIn !== crc16(data.slice(0, -2))) {
-        error = "CRC error";
-        next(new Error(error));
-        return;
-    }
+  /* check message CRC
+   * if CRC is bad raise an error
+   */
+  // var crcIn = data.readUInt16LE(data.length - 2);
+  // if (crcIn !== crc16(data.slice(0, -2))) {
+  //   error = 'CRC error';
+  //   next(new Error(error));
+  //   return;
+  // }
 
     // if crc is OK, read address and function code
     var address = data.readUInt8(0);
@@ -375,16 +396,16 @@ function _onReceive(data) {
         return;
     }
 
-    /* check message length
-     * if we do not expect this data
-     * raise an error
-     */
-    if (!transaction.lengthUnknown && data.length !== transaction.nextLength) {
-        error = "Data length error, expected " +
-            transaction.nextLength + " got " + data.length;
-        next(new Error(error));
-        return;
-    }
+  /* check message length
+   * if we do not expect this data
+   * raise an error
+   */
+  // if (!transaction.lengthUnknown && data.length !== transaction.nextLength) {
+  //   error = 'Data length error, expected ' +
+  //     transaction.nextLength + ' got ' + data.length;
+  //   next(new Error(error));
+  //   return;
+  // }
 
     /* check message address and code
      * if we do not expect this message
